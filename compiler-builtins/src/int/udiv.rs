@@ -80,6 +80,49 @@ intrinsics! {
     }
 
     #[unsafe(naked)]
+    pub unsafe extern "C" fn __divmodqi4() {
+        // compute signed 8-bit `n / d` and `n % d`.
+        //
+        // Note: GCC implements a [non-standard calling convention](https://gcc.gnu.org/wiki/avr-gcc#Exceptions_to_the_Calling_Convention) for this function.
+        // Inputs:
+        //     R24: dividend
+        //     R22: divisor
+        // Outputs:
+        //     R24: quotient  (dividend / divisor)
+        //     R25: remainder (dividend % divisor)
+        // Clobbers:
+        //     R23: loop counter
+        //     R0:  sign bits
+        //     T:   unused
+        core::arch::naked_asm!(
+            // This assembly routine adjusts the inputs to perform an unsigned division.
+            // The quotient is negative when the dividend and divisor signs differ.
+            // The remainder has the same sign as the dividend.
+            "mov R0, R22",
+            "eor R0, R24",  // R0.7 is the quotient sign
+            "cbr R0, 0",    // R0.0 is the remainder sign
+
+            "tst R24",
+            "brpos 1f",     // if dividend is negative
+            "neg R24",      //    negate to a positive value
+            "sbr R0, 0",    //    set remainder sign
+            "1:",
+
+            "sbrc R22, 7",  // if divisor is negative
+            "neg R22",      //    negate to a positive value
+
+            "call __udivmodqi4",    // perform unsigned division
+                                    // R24 = quotient, R25 = remainder
+            "sbrc R0, 7",   // apply quotient sign
+            "neg R24",
+
+            "sbrc R0, 0",   // apply remainder sign
+            "neg R25",
+            "ret"
+        );
+    }
+
+    #[unsafe(naked)]
     pub unsafe extern "C" fn __udivmodhi4() {
         // compute unsigned 16-bit `n / d` and `n % d`.
         //
